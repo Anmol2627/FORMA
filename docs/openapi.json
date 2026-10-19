@@ -1,0 +1,436 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "FORMA Backend API",
+    "description": "AI-powered quiz and study platform for students.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "details": { "type": "array", "items": { "type": "object" } }
+            },
+            "required": ["code", "message"]
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "password", "display_name"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 8 },
+          "display_name": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string" },
+          "display_name": { "type": "string" },
+          "account_status": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "OptionCreate": {
+        "type": "object",
+        "required": ["option_text"],
+        "properties": {
+          "option_text": { "type": "string" },
+          "is_correct": { "type": "boolean", "default": false }
+        }
+      },
+      "QuestionCreate": {
+        "type": "object",
+        "required": ["prompt", "options"],
+        "properties": {
+          "prompt": { "type": "string" },
+          "explanation": { "type": "string" },
+          "display_position": { "type": "integer", "default": 0 },
+          "topic": { "type": "string" },
+          "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+          "options": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/OptionCreate" }
+          }
+        }
+      },
+      "QuizCreate": {
+        "type": "object",
+        "required": ["title", "questions"],
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "visibility": { "type": "string", "enum": ["private", "public"], "default": "private" },
+          "questions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/QuestionCreate" }
+          }
+        }
+      },
+      "AttemptSubmit": {
+        "type": "object",
+        "required": ["answers"],
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["question_id"],
+              "properties": {
+                "question_id": { "type": "string" },
+                "selected_option_id": { "type": "string", "nullable": true }
+              }
+            }
+          }
+        }
+      },
+      "QuizGenerateRequest": {
+        "type": "object",
+        "required": ["topic"],
+        "properties": {
+          "topic": { "type": "string" },
+          "question_count": { "type": "integer", "default": 5, "minimum": 1, "maximum": 20 },
+          "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"], "default": "medium" },
+          "source_text": { "type": "string", "nullable": true }
+        }
+      },
+      "ChatSessionCreate": {
+        "type": "object",
+        "required": ["document_id"],
+        "properties": {
+          "document_id": { "type": "string" },
+          "title": { "type": "string", "nullable": true }
+        }
+      },
+      "ChatMessageSend": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": { "description": "API is healthy" }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness check",
+        "responses": {
+          "200": { "description": "Database connected" },
+          "503": { "description": "Database unavailable" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created and access token issued" },
+          "409": { "description": "Email already exists" },
+          "422": { "description": "Validation error" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate student login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get authenticated user profile",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Profile data" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/quizzes": {
+      "get": {
+        "summary": "List accessible quizzes",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "include_public", "in": "query", "schema": { "type": "boolean", "default": true } }
+        ],
+        "responses": {
+          "200": { "description": "List of quizzes" }
+        }
+      },
+      "post": {
+        "summary": "Create a new quiz",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/QuizCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Quiz created" }
+        }
+      }
+    },
+    "/quizzes/{quiz_id}": {
+      "get": {
+        "summary": "Get quiz details",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "quiz_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Quiz details" },
+          "403": { "description": "Private quiz forbidden" },
+          "404": { "description": "Quiz not found" }
+        }
+      },
+      "patch": {
+        "summary": "Update quiz",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "quiz_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Quiz updated" },
+          "403": { "description": "Forbidden" }
+        }
+      },
+      "delete": {
+        "summary": "Delete quiz",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "quiz_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Quiz deleted" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/quizzes/{quiz_id}/take": {
+      "get": {
+        "summary": "Get quiz in taking mode (masks answers and explanations)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "quiz_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Safe quiz view" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/quizzes/{quiz_id}/attempts": {
+      "post": {
+        "summary": "Submit quiz attempt for server-side scoring",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "quiz_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AttemptSubmit" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Attempt evaluated and saved" }
+        }
+      }
+    },
+    "/attempts/{attempt_id}/results": {
+      "get": {
+        "summary": "Get attempt results and question explanations",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "attempt_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Attempt review details" },
+          "403": { "description": "Only attempt owner can review results" }
+        }
+      }
+    },
+    "/ai/generate-quiz": {
+      "post": {
+        "summary": "Generate a multiple choice quiz using AI",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/QuizGenerateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Quiz generated and saved as private quiz" },
+          "502": { "description": "LLM provider failure or malformed JSON" }
+        }
+      }
+    },
+    "/documents": {
+      "post": {
+        "summary": "Upload a PDF study document and extract page text",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Document uploaded and processed" },
+          "400": { "description": "Invalid or corrupted PDF" }
+        }
+      },
+      "get": {
+        "summary": "List documents owned by student",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of documents" }
+        }
+      }
+    },
+    "/documents/{document_id}": {
+      "get": {
+        "summary": "Get document details and extracted page texts",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Document details" },
+          "403": { "description": "Forbidden" }
+        }
+      },
+      "delete": {
+        "summary": "Delete document and purge file from storage",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Document deleted" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/chat/sessions": {
+      "post": {
+        "summary": "Create chat session linked to an owned document",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatSessionCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Session created" },
+          "403": { "description": "Document not owned by user" }
+        }
+      },
+      "get": {
+        "summary": "List chat sessions for user",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of sessions" }
+        }
+      }
+    },
+    "/chat/sessions/{session_id}/messages": {
+      "get": {
+        "summary": "Get chat message history",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "session_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Message history" },
+          "403": { "description": "Forbidden" }
+        }
+      },
+      "post": {
+        "summary": "Post message in session (returns 501 until user implements RAG pipeline)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "session_id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatMessageSend" }
+            }
+          }
+        },
+        "responses": {
+          "501": { "description": "RAG pipeline awaiting user implementation" }
+        }
+      }
+    },
+    "/progress": {
+      "get": {
+        "summary": "Get student learning analytics and attempt stats",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Progress analytics" }
+        }
+      }
+    }
+  }
+}
