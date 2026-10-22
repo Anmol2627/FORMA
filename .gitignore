@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment and IDE
+.env
+.idea/
+.vscode/
+.DS_Store
+
+# Logs and local databases
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary and backup files
+*.zip
+app_backup.py
