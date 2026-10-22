@@ -76,3 +76,39 @@ def login(email, password):
 
 def get_quizzes(token):
     return request("GET", "/quizzes?include_public=true", token=token)
+
+def create_quiz(title, description, questions, token, visibility="public"):
+    return request(
+        "POST",
+        "/quizzes",
+        {
+            "title": title,
+            "description": description,
+            "visibility": visibility,
+            "questions": questions,
+        },
+        token=token,
+    )
+
+def get_quiz(quiz_id, token):
+    return request("GET", f"/quizzes/{quiz_id}", token=token)
+
+def get_quiz_to_take(quiz_id, token):
+    return request("GET", f"/quizzes/{quiz_id}/take", token=token)
+
+
+def submit_attempt(quiz_id, answers, token):
+    return request(
+        "POST",
+        f"/quizzes/{quiz_id}/attempts",
+        {"answers": answers},
+        token=token,
+    )
+
+
+def get_attempt_results(attempt_id, token):
+    return request(
+        "GET",
+        f"/attempts/{attempt_id}/results",
+        token=token,
+    )

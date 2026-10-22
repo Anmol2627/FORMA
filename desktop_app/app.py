@@ -109,26 +109,55 @@ class FormaApp(tk.Tk):
         else:
             self.profile_button.configure(text="◉  Sign in / Sign up  ⌄")
 
+    
     def toggle_profile_menu(self):
         if self.profile_menu.winfo_manager():
             self.profile_menu.place_forget()
             return
-        self.profile_menu.place(relx=1.0, x=-25, y=52, anchor="ne")
+
         for child in self.profile_menu.winfo_children():
             child.destroy()
+
         options = (
-            [("My profile", lambda: self.show_page("Profile")),
-             ("Log out", self.logout)]
-            if self.current_user else
-            [("Sign in", lambda: self.show_page("Sign in")),
-             ("Create an account", lambda: self.show_page("Sign up"))]
+            [
+                ("My profile", lambda: self.show_page("Profile")),
+                ("Log out", self.logout),
+            ]
+            if self.current_user
+            else [
+                ("Sign in", lambda: self.show_page("Sign in")),
+                ("Create an account", lambda: self.show_page("Sign up")),
+            ]
         )
-        for label, command in options:
-            tk.Button(self.profile_menu, text=label, anchor="w", width=22,
-                      font=(FONT, 10), relief="flat", bd=0, padx=14, pady=9,
-                      bg=COLORS["surface"], fg=COLORS["ink"],
-                      activebackground=COLORS["violet_light"],
-                      command=lambda cmd=command: self._menu_action(cmd)).pack(fill="x")
+
+        for label, callback in options:
+            button = tk.Button(
+                self.profile_menu,
+                text=label,
+                anchor="w",
+                font=(FONT, 10),
+                relief="flat",
+                bd=0,
+                padx=14,
+                pady=10,
+                bg=COLORS["surface"],
+                fg=COLORS["ink"],
+                activebackground=COLORS["violet_light"],
+                activeforeground=COLORS["ink"],
+                cursor="hand2",
+                command=lambda cb=callback: self._menu_action(cb),
+            )
+            button.pack(fill="x")
+
+        self.profile_menu.update_idletasks()
+        self.profile_menu.lift()
+        self.profile_menu.place(
+            relx=1.0,
+            x=-5,
+            y=52,
+            anchor="ne",
+        )
+
 
     def _menu_action(self, command):
         self.profile_menu.place_forget()
@@ -166,13 +195,13 @@ class FormaApp(tk.Tk):
 
     def _build_auth(self, mode):
         panel = tk.Frame(self.content, bg=COLORS["background"])
-        panel.pack(expand=True)
+        panel.pack(fill="both", expand=True, anchor="n")
         # Let the card size itself to fit all fields and buttons. Disabling geometry
         # propagation here without setting a height collapsed the card and clipped
         # the authentication controls on some Tk builds.
         card = tk.Frame(panel, bg=COLORS["surface"], highlightbackground=COLORS["border"],
                         highlightthickness=1, padx=34, pady=28, width=430)
-        card.pack()
+        card.pack(anchor="n", pady=30)
 
         tk.Label(card, text="✿  FORMA", font=(FONT, 13, "bold"),
                  bg=COLORS["surface"], fg=COLORS["violet"]).pack(anchor="w")
@@ -425,11 +454,109 @@ class FormaApp(tk.Tk):
         if subject == "All":
             self.show_page("Explore Quizzes")
         else:
-            messagebox.showinfo("Subject filter", f"{subject} filtering will be connected to quiz data in the next stage.")
-
+            self._open_subject(subject)
+            
     def _open_subject(self, subject):
-        messagebox.showinfo(subject, f"The {subject} quiz list will be connected to the backend in a later stage.")
+        if not self.access_token:
+            messagebox.showinfo(
+                "Sign in required",
+                "Please sign in to view available quizzes."
+            )
+            self.show_page("Sign in")
+            return
 
+        for widget in self.content.winfo_children():
+            widget.destroy()
+
+        tk.Label(
+            self.content,
+            text=subject,
+            font=(FONT, 25, "bold"),
+            bg=COLORS["background"],
+            fg=COLORS["ink"]
+        ).pack(anchor="w", pady=(14, 4))
+
+        tk.Button(
+            self.content,
+            text="← Back to Explore",
+            command=lambda: self.show_page("Explore Quizzes")
+        ).pack(anchor="w", pady=8)
+
+        try:
+            response = api_client.get_quizzes(self.access_token)
+            quizzes = response.get("quizzes", [])
+        except api_client.APIError as exc:
+            messagebox.showerror("Could not load quizzes", str(exc))
+            return
+
+        if not quizzes:
+            tk.Label(
+                self.content,
+                text="No quizzes found. Create a quiz first or try again later.",
+                font=(FONT, 11),
+                bg=COLORS["background"],
+                fg=COLORS["muted"]
+            ).pack(anchor="w", pady=16)
+            return
+
+        for quiz in quizzes:
+            card = tk.Frame(
+                self.content,
+                bg=COLORS["surface"],
+                padx=16,
+                pady=12
+            )
+            card.pack(fill="x", pady=6)
+
+            tk.Label(
+                card,
+                text=quiz.get("title", "Untitled quiz"),
+                font=(FONT, 13, "bold"),
+                bg=COLORS["surface"],
+                fg=COLORS["ink"]
+            ).pack(anchor="w")
+
+            tk.Label(
+                card,
+                text=(
+                    f'{quiz.get("description") or "Ready to practise"}'
+                    f' · {quiz.get("question_count", 0)} questions'
+                ),
+                font=(FONT, 10),
+                bg=COLORS["surface"],
+                fg=COLORS["muted"],
+                wraplength=700
+            ).pack(anchor="w", pady=5)
+
+            tk.Button(
+                card,
+                text="Take quiz →",
+                command=lambda qid=quiz["id"]: self._start_quiz(qid)
+            ).pack(anchor="w", pady=5)
+
+    def _start_quiz(self, quiz_id):
+        if not self.access_token:
+            messagebox.showinfo(
+                "Sign in required",
+                "Please sign in first."
+            )
+            self.show_page("Sign in")
+            return
+
+        try:
+            response = api_client.get_quiz_to_take(
+                quiz_id, self.access_token
+            )
+            self.active_quiz = response["quiz"]
+            self.quiz_answer_vars = {}
+            self.show_page("Take Quiz")
+        except api_client.APIError as exc:
+            messagebox.showerror("Could not open quiz", str(exc))
+        except (KeyError, TypeError):
+            messagebox.showerror(
+                "Invalid response",
+                "The backend returned unexpected quiz data."
+            )
 
     def _require_login(self, action_name):
         if self.current_user:
@@ -473,27 +600,64 @@ class FormaApp(tk.Tk):
         explanation_var = tk.StringVar()
         self._simple_field(question_frame, "Explanation shown after answering (optional)", explanation_var)
 
+        
         def save():
             title = title_var.get().strip()
             prompt = prompt_var.get().strip()
             options = [v.get().strip() for v in option_vars]
-            if not title or not prompt or any(not value for value in options):
-                messagebox.showwarning("Missing details", "Enter a quiz title, a question, and all four answer options.")
-                return
-            database.create_quiz(self.current_user["id"], title, desc_var.get(), [{
-                "prompt": prompt, "options": options, "correct_index": correct_var.get(),
-                "explanation": explanation_var.get()
-            }])
-            messagebox.showinfo("Quiz saved", "Your quiz has been saved. You can find it under My Quizzes.")
-            self.show_page("My Quizzes")
 
-        buttons = tk.Frame(form, bg=COLORS["surface"])
-        buttons.pack(fill="x", pady=(16, 0))
-        tk.Button(buttons, text="Save quiz", font=(FONT, 10, "bold"), bg=COLORS["violet"],
-                  fg="white", relief="flat", padx=18, pady=9, command=save).pack(side="left")
-        tk.Button(buttons, text="Cancel", font=(FONT, 10), bg=COLORS["violet_light"],
-                  fg=COLORS["ink"], relief="flat", padx=18, pady=9,
-                  command=lambda: self.show_page("Explore Quizzes")).pack(side="left", padx=8)
+            if not title or not prompt or any(not value for value in options):
+                messagebox.showwarning(
+                    "Missing details",
+                    "Enter a quiz title, a question, and all four answer options."
+                )
+                return
+
+            questions = [{
+                "prompt": prompt,
+                "explanation": explanation_var.get().strip(),
+                "options": [
+                    {
+                        "option_text": option,
+                        "is_correct": index == correct_var.get()
+                    }
+                    for index, option in enumerate(options)
+                ]
+            }]
+
+            try:
+                api_client.create_quiz(
+                    title=title,
+                    description=desc_var.get().strip(),
+                    questions=questions,
+                    token=self.access_token,
+                    visibility="public"
+                )
+
+                messagebox.showinfo(
+                    "Quiz saved",
+                    "Your quiz has been saved successfully!"
+                )
+                self.show_page("My Quizzes")
+
+            except api_client.APIError as exc:
+                messagebox.showerror("Could not save quiz", str(exc))
+    
+        tk.Button(
+            form,
+            text="Save Quiz",
+            font=(FONT, 11, "bold"),
+            bg=COLORS["violet"],
+            fg="#FFFFFF",
+            activebackground=COLORS["violet"],
+            activeforeground="#FFFFFF",
+            relief="flat",
+            bd=0,
+            padx=24,
+            pady=10,
+            cursor="hand2",
+            command=save,
+        ).pack(anchor="e", pady=(16, 0))
 
     def _simple_field(self, parent, label, variable):
         tk.Label(parent, text=label, font=(FONT, 9, "bold"),
@@ -503,36 +667,85 @@ class FormaApp(tk.Tk):
         entry.pack(fill="x", ipady=6)
         return entry
 
+    
     def _build_my_quizzes(self):
         if not self._require_login("view your quizzes"):
             return
+
         header = tk.Frame(self.content, bg=COLORS["background"])
         header.pack(fill="x", pady=(18, 14))
-        tk.Label(header, text="My quizzes", font=(FONT, 27, "bold"),
-                 bg=COLORS["background"], fg=COLORS["ink"]).pack(side="left")
-        tk.Button(header, text="+ Create quiz", font=(FONT, 10, "bold"),
-                  bg=COLORS["violet"], fg="white", relief="flat", padx=14, pady=8,
-                  command=lambda: self.show_page("Create Quiz")).pack(side="right")
-        quizzes = database.list_quizzes(self.current_user["id"])
-        if not quizzes:
-            tk.Label(self.content, text="Your quiz library is empty for now.",
-                     font=(FONT, 12), bg=COLORS["background"], fg=COLORS["muted"]).pack(anchor="w", pady=20)
-            tk.Label(self.content, text="Create your first quiz to see it here.",
-                     font=(FONT, 10), bg=COLORS["background"], fg=COLORS["muted"]).pack(anchor="w")
+
+        tk.Label(
+            header, text="My quizzes", font=(FONT, 27, "bold"),
+            bg=COLORS["background"], fg=COLORS["ink"]
+        ).pack(side="left")
+
+        tk.Button(
+            header, text="+ Create quiz", font=(FONT, 10, "bold"),
+            bg=COLORS["violet"], fg="white", relief="flat",
+            padx=14, pady=8,
+            command=lambda: self.show_page("Create Quiz")
+        ).pack(side="right")
+
+        try:
+            response = api_client.request(
+                "GET", "/quizzes?include_public=false",
+                token=self.access_token
+            )
+            quizzes = response.get("quizzes", [])
+        except api_client.APIError as exc:
+            messagebox.showerror("Could not load quizzes", str(exc))
             return
+
+        if not quizzes:
+            tk.Label(
+                self.content,
+                text="Your quiz library is empty for now.",
+                font=(FONT, 12),
+                bg=COLORS["background"], fg=COLORS["muted"]
+            ).pack(anchor="w", pady=20)
+
+            tk.Label(
+                self.content,
+                text="Create your first quiz to see it here.",
+                font=(FONT, 10),
+                bg=COLORS["background"], fg=COLORS["muted"]
+            ).pack(anchor="w")
+            return
+
         for quiz in quizzes:
-            card = tk.Frame(self.content, bg=COLORS["surface"], padx=16, pady=13,
-                            highlightbackground=COLORS["border"], highlightthickness=1)
+            card = tk.Frame(
+                self.content, bg=COLORS["surface"], padx=16, pady=13,
+                highlightbackground=COLORS["border"],
+                highlightthickness=1
+            )
             card.pack(fill="x", pady=5)
+
             info = tk.Frame(card, bg=COLORS["surface"])
             info.pack(side="left", fill="x", expand=True)
-            tk.Label(info, text=quiz["title"], font=(FONT, 12, "bold"),
-                     bg=COLORS["surface"], fg=COLORS["ink"]).pack(anchor="w")
-            tk.Label(info, text=f'{quiz["question_count"]} question(s)  ·  {quiz["description"]}',
-                     font=(FONT, 9), bg=COLORS["surface"], fg=COLORS["muted"]).pack(anchor="w", pady=(4, 0))
-            tk.Button(card, text="Take quiz  →", font=(FONT, 9, "bold"),
-                      bg=COLORS["violet_light"], fg=COLORS["ink"], relief="flat", padx=12, pady=7,
-                      command=lambda qid=quiz["id"]: self._take_quiz(qid)).pack(side="right")
+
+            tk.Label(
+                info, text=quiz.get("title", "Untitled quiz"),
+                font=(FONT, 12, "bold"),
+                bg=COLORS["surface"], fg=COLORS["ink"]
+            ).pack(anchor="w")
+
+            description = quiz.get("description") or "No description"
+            count = quiz.get("question_count", 0)
+
+            tk.Label(
+                info, text=f"{count} question(s)  ·  {description}",
+                font=(FONT, 9),
+                bg=COLORS["surface"], fg=COLORS["muted"]
+            ).pack(anchor="w", pady=(4, 0))
+
+            tk.Button(
+                card, text="Take quiz  →",
+                font=(FONT, 9, "bold"),
+                bg=COLORS["violet_light"], fg=COLORS["ink"],
+                relief="flat", padx=12, pady=7,
+                command=lambda qid=quiz["id"]: self._start_quiz(qid)
+            ).pack(side="right")
 
     def _take_quiz(self, quiz_id):
         if not self._require_login("take a quiz"):
@@ -570,50 +783,131 @@ class FormaApp(tk.Tk):
         tk.Button(self.content, text="Submit answers", font=(FONT, 10, "bold"),
                   bg=COLORS["violet"], fg="white", relief="flat", padx=18, pady=10,
                   command=self._submit_quiz).pack(anchor="w", pady=12)
-
     def _submit_quiz(self):
         quiz = self.active_quiz
         if not quiz:
             return
-        unanswered = [q for q in quiz["questions"] if self.quiz_answer_vars[q["id"]].get() < 0]
-        if unanswered:
-            messagebox.showwarning("Incomplete quiz", "Please answer every question before submitting.")
-            return
-        score = 0
-        for question in quiz["questions"]:
-            chosen = self.quiz_answer_vars[question["id"]].get()
-            if question["options"][chosen]["is_correct"]:
-                score += 1
-        database.save_attempt(self.current_user["id"], quiz["id"], score, len(quiz["questions"]))
-        self._show_quiz_results(quiz, score)
 
-    def _show_quiz_results(self, quiz, score):
+
+        answers = []
+        for question in quiz["questions"]:
+            selected_index = self.quiz_answer_vars[question["id"]].get()
+
+            if selected_index < 0:
+                messagebox.showwarning(
+                    "Incomplete quiz",
+                    "Please answer every question before submitting."
+                )
+                return
+
+            selected_option = question["options"][selected_index]
+            answers.append({
+                "question_id": question["id"],
+                "selected_option_id": selected_option["id"],
+            })
+
+        try:
+            submission = api_client.submit_attempt(
+                quiz["id"], answers, self.access_token
+            )
+            attempt = submission["attempt"]
+
+            result_response = api_client.get_attempt_results(
+                attempt["id"], self.access_token
+            )
+            results = result_response["attempt"]
+
+            self._show_quiz_results(quiz, results)
+
+        except api_client.APIError as exc:
+            messagebox.showerror("Submission failed", str(exc))
+        except (KeyError, TypeError) as exc:
+            messagebox.showerror(
+                "Invalid response",
+                f"The backend returned unexpected result data: {exc}"
+            )
+
+    def _show_quiz_results(self, quiz, results):
         for widget in self.content.winfo_children():
             widget.destroy()
-        total = len(quiz["questions"])
-        tk.Label(self.content, text="Quiz complete!", font=(FONT, 27, "bold"),
-                 bg=COLORS["background"], fg=COLORS["ink"]).pack(anchor="w", pady=(12, 3))
-        tk.Label(self.content, text=f"You scored {score} out of {total} ({round(score / total * 100)}%).",
-                 font=(FONT, 15, "bold"), bg=COLORS["background"], fg=COLORS["violet"]).pack(anchor="w", pady=(0, 12))
-        for idx, question in enumerate(quiz["questions"]):
-            chosen = self.quiz_answer_vars[question["id"]].get()
-            correct_idx = next(i for i, opt in enumerate(question["options"]) if opt["is_correct"])
-            card = tk.Frame(self.content, bg=COLORS["surface"], padx=14, pady=10,
-                            highlightbackground=COLORS["border"], highlightthickness=1)
-            card.pack(fill="x", pady=5)
-            tk.Label(card, text=f'{idx + 1}. {question["prompt"]}', font=(FONT, 10, "bold"),
-                     bg=COLORS["surface"], fg=COLORS["ink"], wraplength=760,
-                     justify="left").pack(anchor="w")
-            tk.Label(card, text=f'Correct answer: {question["options"][correct_idx]["option_text"]}',
-                     font=(FONT, 9), bg=COLORS["surface"], fg=COLORS["green_text"]).pack(anchor="w", pady=(5, 0))
-            if question["explanation"]:
-                tk.Label(card, text=f'Explanation: {question["explanation"]}', font=(FONT, 9),
-                         bg=COLORS["surface"], fg=COLORS["muted"], wraplength=760,
-                         justify="left").pack(anchor="w", pady=(3, 0))
-        tk.Button(self.content, text="Back to My Quizzes", font=(FONT, 10, "bold"),
-                  bg=COLORS["violet"], fg="white", relief="flat", padx=16, pady=9,
-                  command=lambda: self.show_page("My Quizzes")).pack(anchor="w", pady=12)
+    def _show_quiz_results(self, quiz, results):
+        for widget in self.content.winfo_children():
+            widget.destroy()
 
+        score = results.get("score", 0)
+        total = results.get("total_questions", len(quiz["questions"]))
+        percentage = results.get("accuracy_percentage", 0)
+
+        tk.Label(
+            self.content,
+            text="Quiz complete!",
+            font=(FONT, 27, "bold"),
+            bg=COLORS["background"],
+            fg=COLORS["ink"]
+        ).pack(anchor="w", pady=(12, 3))
+
+        tk.Label(
+            self.content,
+            text=f"You scored {score} out of {total} ({percentage}%).",
+            font=(FONT, 15, "bold"),
+            bg=COLORS["background"],
+            fg=COLORS["violet"]
+        ).pack(anchor="w", pady=(0, 12))
+
+        for idx, answer in enumerate(results.get("answers", [])):
+            card = tk.Frame(
+                self.content,
+                bg=COLORS["surface"],
+                padx=14,
+                pady=10,
+                highlightbackground=COLORS["border"],
+                highlightthickness=1
+            )
+            card.pack(fill="x", pady=5)
+        tk.Label(
+            card,
+            text=f'{idx + 1}. {answer.get("question_prompt", "Question")}',
+            font=(FONT, 10, "bold"), bg=COLORS["surface"],
+            fg=COLORS["ink"], wraplength=760, justify="left"
+        ).pack(anchor="w")
+
+        selected_text = answer.get("selected_option_text") or "Not answered"
+        correct = answer.get("correct_option") or {}
+        correct_text = correct.get("option_text", "Unavailable")
+
+        tk.Label(
+            card, text=f"Your answer: {selected_text}",
+            font=(FONT, 9), bg=COLORS["surface"],
+            fg=COLORS["green_text"] if answer.get("is_correct")
+            else COLORS["muted"],
+            wraplength=760, justify="left"
+        ).pack(anchor="w", pady=(5, 0))
+
+        tk.Label(
+            card, text=f"Correct answer: {correct_text}",
+            font=(FONT, 9), bg=COLORS["surface"],
+            fg=COLORS["green_text"], wraplength=760, justify="left"
+        ).pack(anchor="w", pady=(3, 0))
+
+        explanation = answer.get("explanation")
+        if explanation:
+            tk.Label(
+                card, text=f"Explanation: {explanation}",
+                font=(FONT, 9), bg=COLORS["surface"],
+                fg=COLORS["muted"], wraplength=760, justify="left"
+            ).pack(anchor="w", pady=(3, 0))
+
+            tk.Button(
+            self.content,
+            text="Back to Explore Quizzes",
+            font=(FONT, 10, "bold"),
+            bg=COLORS["violet"],
+            fg="white",
+            relief="flat",
+            padx=16,
+            pady=9,
+            command=lambda: self.show_page("Explore Quizzes")
+        ).pack(anchor="w", pady=12)
     def _build_progress(self):
         if not self._require_login("view your progress"):
             return
