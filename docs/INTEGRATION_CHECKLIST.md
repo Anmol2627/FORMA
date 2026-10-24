@@ -1,80 +1,73 @@
-# Frontend Integration Checklist
+# Frontend & Backend Integration Checklist
 
-This checklist is for your teammate building the frontend interface to integrate smoothly with the backend.
+This document tracks the integration between the **Python Tkinter Desktop GUI** (`desktop_app`) and the **Flask REST API** (`backend`).
 
 ---
 
 ## 1. Authentication & Session Management
 
-- [ ] **Registration Screen**: Calls `POST /api/v1/auth/register` with `email`, `password` (min 8 chars), `display_name`.
-- [ ] **Login Screen**: Calls `POST /api/v1/auth/login` with `email`, `password`.
-- [ ] **Token Storage**: Persist `access_token` in memory or secure storage (e.g., `localStorage` or HttpOnly cookies).
-- [ ] **Request Headers**: Attach `Authorization: Bearer <token>` to all subsequent requests.
-- [ ] **Token Expiration Handling**: When an API call returns `401 Unauthorized` with `code: "token_expired"`, clear stored token and redirect to `/login`.
-- [ ] **Current User Profile**: Call `GET /api/v1/auth/me` on app load to restore student profile and state.
+- [x] **Registration Screen**: `POST /api/v1/auth/register` with `email`, `password` (min 8 chars), `display_name`.
+- [x] **Login Screen**: `POST /api/v1/auth/login` with `email`, `password`.
+- [x] **Token Storage**: Persists `access_token` in application session state (`self.access_token`).
+- [x] **Request Headers**: Automatically attaches `Authorization: Bearer <token>` in `api_client.py`.
+- [x] **Token Expiration Handling**: `401 Unauthorized` raises `AuthenticationError` and prompts re-authentication.
+- [x] **Current User Profile**: `GET /api/v1/auth/me` retrieves profile and updates UI profile dropdown.
 
 ---
 
 ## 2. Quiz Management & Exploration
 
-- [ ] **Dashboard Quiz List**: Calls `GET /api/v1/quizzes?include_public=true`.
-  - Display cards with `title`, `description`, `question_count`, and badge for `visibility` ("private" vs "public").
-- [ ] **Manual Quiz Creator**: Calls `POST /api/v1/quizzes`.
-  - Validate form ensures at least 1 question, and each question has at least 2 options with exactly 1 radio button marked as `is_correct`.
-- [ ] **Edit Quiz**: Calls `PATCH /api/v1/quizzes/{id}` (available only to the quiz owner).
-- [ ] **Delete Quiz**: Calls `DELETE /api/v1/quizzes/{id}` with a confirmation dialog.
+- [x] **Explore Quizzes Screen**: Calls `GET /api/v1/quizzes?include_public=true`.
+  - Displays subject cards with question count and difficulty level.
+- [x] **Manual Quiz Creator**: Calls `POST /api/v1/quizzes`.
+  - Validates title, question prompt, 4 options, and radio button for correct option.
+- [x] **My Quizzes Library**: Calls `GET /api/v1/quizzes?include_public=false`.
+  - Lists student's owned quizzes with action buttons.
+- [x] **Delete Quiz**: Calls `DELETE /api/v1/quizzes/{id}` with confirmation prompt.
 
 ---
 
 ## 3. Quiz Taking & Secure Scoring Flow
 
-- [ ] **Start Quiz / Exam Mode**: Call `GET /api/v1/quizzes/{id}/take`.
-  - *Note*: This endpoint never returns correct answers, so the student cannot inspect network tabs or console to cheat.
-- [ ] **Submit Quiz Answers**: Call `POST /api/v1/quizzes/{id}/attempts` with array of `{question_id, selected_option_id}`.
-  - Disable submit button during inflight request.
-  - Handle score summary returned in response (`score`, `total_questions`, `accuracy_percentage`).
-- [ ] **Review Page / Results Screen**: Call `GET /api/v1/attempts/{attempt_id}/results`.
-  - Displays each question with:
-    - Student's selected option (highlighted green if correct, red if incorrect).
-    - True correct option.
-    - Pedagogical explanation explaining why the answer is correct.
+- [x] **Start Quiz / Exam Mode**: Calls `GET /api/v1/quizzes/{id}/take`.
+  - **Security Verified**: Correct options, answer keys, and explanations are excluded from payload during taking mode.
+- [x] **Submit Quiz Answers**: Calls `POST /api/v1/quizzes/{id}/attempts` with array of `{question_id, selected_option_id}`.
+  - Server calculates score authoritatively.
+- [x] **Review Page / Results Screen**: Calls `GET /api/v1/attempts/{attempt_id}/results`.
+  - Displays score, accuracy percentage, selected answers (color coded), correct options, and explanations.
 
 ---
 
 ## 4. AI Quiz Generation
 
-- [ ] **AI Quiz Generator Modal/Page**: Calls `POST /api/v1/ai/generate-quiz`.
-  - Fields: `topic`, `question_count` (slider 1–20), `difficulty` ("easy", "medium", "hard"), optional `source_text`.
-  - Show loading spinner with animated message while model generates.
-  - On `201 Created`, navigate directly to take the generated quiz or review it in quiz list.
+- [x] **AI Quiz Generator**: Calls `POST /api/v1/ai/generate-quiz`.
+  - Parameters: `topic`, `question_count` (1–20), `difficulty` (easy, medium, hard), and optional source notes.
+  - Generates structured JSON questions via LLM abstraction and saves as private quiz owned by the student.
 
 ---
 
 ## 5. "Ask Your PDF" & Study Documents
 
-- [ ] **PDF Upload Dropzone**: Calls `POST /api/v1/documents` using `FormData` with `file`.
-  - Restrict file selector to `.pdf` up to 10MB.
-  - Display upload progress bar.
-- [ ] **Document List**: Calls `GET /api/v1/documents` displaying filename, file size, and page count.
-- [ ] **Delete Document**: Calls `DELETE /api/v1/documents/{id}`.
+- [x] **PDF Upload Dropzone / File Picker**: Calls `POST /api/v1/documents` via multipart file upload.
+  - Validates `.pdf` extension, extracts page-by-page text using PyMuPDF (`fitz`), and returns page count.
+- [x] **Document Listing**: Calls `GET /api/v1/documents` displaying filename, file size, and page count.
+- [x] **Delete Document**: Calls `DELETE /api/v1/documents/{id}` and cleans up filesystem storage.
 
 ---
 
-## 6. Chat Sessions ("Ask Your PDF")
+## 6. Chat Sessions ("Ask Your PDF") & RAG Boundary
 
-- [ ] **Start Chat Session**: Calls `POST /api/v1/chat/sessions` with `document_id`.
-- [ ] **Load Chat History**: Calls `GET /api/v1/chat/sessions/{id}/messages`.
-- [ ] **Send Message**: Calls `POST /api/v1/chat/sessions/{id}/messages`.
-  - Handle `501 Not Implemented`: Display a notification banner: *"AI RAG Retrieval is currently in final testing and will be active shortly."*
+- [x] **Start Chat Session**: Calls `POST /api/v1/chat/sessions` with `document_id`.
+- [x] **Load Chat History**: Calls `GET /api/v1/chat/sessions/{id}/messages`.
+- [x] **Send Message**: Calls `POST /api/v1/chat/sessions/{id}/messages`.
+  - **RAG Boundary Handled**: When the backend returns HTTP 501 (`rag_pipeline_not_implemented`), the GUI displays the friendly notice:
+    *"ℹ️ Your question was recorded! The RAG retrieval pipeline is currently being developed and will be active shortly."*
 
 ---
 
 ## 7. Progress Analytics Dashboard
 
-- [ ] **Student Dashboard**: Calls `GET /api/v1/progress`.
-  - Renders metrics:
-    - Total Attempts.
-    - Questions Answered.
-    - Accuracy Percentage (circular progress ring or bar).
-    - Recent attempts table with timestamps and scores.
-  - Zero state: Renders friendly call-to-action: *"You haven't taken any quizzes yet. Take your first quiz today!"*
+- [x] **Student Dashboard**: Calls `GET /api/v1/progress`.
+  - Displays metrics: Total Attempts, Questions Answered, Correct Answers, Overall Accuracy %.
+  - Recent attempts history table with scores and timestamps.
+  - Safe empty state when student has 0 attempts.
