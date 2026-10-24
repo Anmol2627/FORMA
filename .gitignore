@@ -42,11 +42,19 @@ htmlcov/
 *.sqlite
 *.sqlite3
 *.db
+forma_local.db
 backend/instance/
 instance/
 backend/uploads/
 uploads/
 scratch/
+
+# Logs
+*.log
+
+# Temporary and backup files
+*.zip
+app_backup.py
 
 # IDE and OS
 .vscode/

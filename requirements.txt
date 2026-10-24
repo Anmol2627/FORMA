@@ -1,0 +1,1 @@
+# The first GUI milestone uses Python's built-in Tkinter; no pip packages are required yet.
