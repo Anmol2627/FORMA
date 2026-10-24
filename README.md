@@ -8,7 +8,7 @@ The application consists of a modern **Python Tkinter Desktop GUI** frontend int
 
 ## 📸 Application Screenshots
 
-*(Add your screenshots here for project submission and review)*
+*(Application UI in action)*
 
 | Desktop App & Authentication | Explore & Take Quizzes |
 |:---:|:---:|
@@ -20,7 +20,7 @@ The application consists of a modern **Python Tkinter Desktop GUI** frontend int
 
 | Ask Your PDF (RAG Chat with Citations) | Progress & Performance Dashboard |
 |:---:|:---:|
-| ![Ask Your PDF](docs/screenshots/rag_chat.png) | ![Dashboard](docs/screenshots/dashboard.png) |
+| ![Ask Your PDF](docs/screenshots/rag_chat.png) | ![Dashboard](docs/screenshots/dashboard_screen.png) |
 
 ---
 
