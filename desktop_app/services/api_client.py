@@ -2,7 +2,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import requests
 
-from ..config import API_BASE_URL, API_TIMEOUT_SECONDS
+try:
+    from ..config import API_BASE_URL, API_TIMEOUT_SECONDS
+except (ImportError, ValueError):
+    try:
+        from desktop_app.config import API_BASE_URL, API_TIMEOUT_SECONDS
+    except (ImportError, ValueError):
+        from config import API_BASE_URL, API_TIMEOUT_SECONDS
 
 
 class APIError(Exception):

@@ -1,18 +1,40 @@
 import os
 import re
+import sys
+from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from .config import (
-    APP_NAME,
-    MIN_HEIGHT,
-    MIN_WIDTH,
-    WINDOW_HEIGHT,
-    WINDOW_TITLE,
-    WINDOW_WIDTH,
-)
-from .services import api_client
-from .theme import COLORS, FONT
+# Ensure project root and desktop_app are in sys.path for direct execution
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+
+try:
+    from .config import (
+        APP_NAME,
+        MIN_HEIGHT,
+        MIN_WIDTH,
+        WINDOW_HEIGHT,
+        WINDOW_TITLE,
+        WINDOW_WIDTH,
+    )
+    from .services import api_client
+    from .theme import COLORS, FONT
+except (ImportError, ValueError):
+    from config import (
+        APP_NAME,
+        MIN_HEIGHT,
+        MIN_WIDTH,
+        WINDOW_HEIGHT,
+        WINDOW_TITLE,
+        WINDOW_WIDTH,
+    )
+    import services.api_client as api_client
+    from theme import COLORS, FONT
 
 
 class FormaApp(tk.Tk):
@@ -1459,3 +1481,8 @@ class FormaApp(tk.Tk):
                  bg=COLORS["background"], fg=COLORS["ink"]).pack(anchor="w", pady=(25, 5))
         tk.Label(self.content, text="This screen is part of the FORMA plan. We'll build it next.",
                  font=(FONT, 11), bg=COLORS["background"], fg=COLORS["muted"]).pack(anchor="w")
+
+
+if __name__ == "__main__":
+    app = FormaApp()
+    app.mainloop()
