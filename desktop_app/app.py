@@ -136,8 +136,60 @@ class FormaApp(tk.Tk):
             highlightbackground=COLORS["border"], highlightthickness=1
         )
 
-        self.content = tk.Frame(self.main, bg=COLORS["background"])
-        self.content.pack(fill="both", expand=True, padx=30, pady=(0, 12))
+        # Scrollable content area
+        self.content_container = tk.Frame(self.main, bg=COLORS["background"])
+        self.content_container.pack(fill="both", expand=True, padx=(30, 8), pady=(0, 12))
+
+        self.content_canvas = tk.Canvas(
+            self.content_container,
+            bg=COLORS["background"],
+            borderwidth=0,
+            highlightthickness=0
+        )
+        self.content_scrollbar = tk.Scrollbar(
+            self.content_container,
+            orient="vertical",
+            command=self.content_canvas.yview
+        )
+        self.content = tk.Frame(self.content_canvas, bg=COLORS["background"])
+
+        self.content_window = self.content_canvas.create_window(
+            (0, 0), window=self.content, anchor="nw"
+        )
+
+        self.content_canvas.configure(yscrollcommand=self.content_scrollbar.set)
+
+        def _on_frame_configure(event):
+            self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all"))
+
+        def _on_canvas_configure(event):
+            self.content_canvas.itemconfig(self.content_window, width=event.width)
+
+        self.content.bind("<Configure>", _on_frame_configure)
+        self.content_canvas.bind("<Configure>", _on_canvas_configure)
+
+        self.content_canvas.pack(side="left", fill="both", expand=True)
+        self.content_scrollbar.pack(side="right", fill="y")
+
+        # Global mousewheel scrolling for the content canvas
+        def _on_mousewheel(event):
+            try:
+                if not self.content_canvas.winfo_ismapped():
+                    return
+                # Don't scroll canvas if hovering inside a Text widget that has its own scroll
+                if isinstance(event.widget, (tk.Text, tk.Listbox)):
+                    return
+                bbox = self.content_canvas.bbox("all")
+                if bbox and (bbox[3] - bbox[1]) > self.content_canvas.winfo_height():
+                    delta = int(-1 * (event.delta / 120))
+                    self.content_canvas.yview_scroll(delta, "units")
+            except Exception:
+                pass
+
+        self.bind_all("<MouseWheel>", _on_mousewheel)
+        self.bind_all("<Button-4>", lambda e: self.content_canvas.yview_scroll(-1, "units"))
+        self.bind_all("<Button-5>", lambda e: self.content_canvas.yview_scroll(1, "units"))
+
         self._update_profile_button()
 
     def _update_profile_button(self):
@@ -209,6 +261,9 @@ class FormaApp(tk.Tk):
             )
         for widget in self.content.winfo_children():
             widget.destroy()
+
+        if hasattr(self, "content_canvas"):
+            self.content_canvas.yview_moveto(0.0)
 
         if page == "Home":
             self._build_home()
@@ -792,7 +847,111 @@ class FormaApp(tk.Tk):
             tk.Radiobutton(options_row, text=level.capitalize(), variable=diff_var, value=level,
                            bg=COLORS["surface"]).pack(side="left", padx=5)
 
-        tk.Label(card, text="Reference Lecture Notes / Source Text (Optional):", font=(FONT, 9, "bold"),
+        # -----------------------------------------------------------------
+        # Document Upload Section (PDF / TXT / MD)
+        # -----------------------------------------------------------------
+        upload_box = tk.Frame(
+            card, bg=COLORS["violet_light"], padx=14, pady=12,
+            highlightbackground=COLORS["violet"], highlightthickness=1
+        )
+        upload_box.pack(fill="x", pady=(12, 10))
+
+        tk.Label(
+            upload_box, text="📄 Upload Document to Generate Quiz (PDF / Lecture Notes)",
+            font=(FONT, 10, "bold"), bg=COLORS["violet_light"], fg=COLORS["ink"]
+        ).pack(anchor="w")
+
+        doc_status_var = tk.StringVar(
+            value="Upload a PDF or notes file to generate questions tailored to your course material."
+        )
+        tk.Label(
+            upload_box, textvariable=doc_status_var, font=(FONT, 9),
+            bg=COLORS["violet_light"], fg=COLORS["muted"], wraplength=720, justify="left"
+        ).pack(anchor="w", pady=(3, 8))
+
+        upload_btns = tk.Frame(upload_box, bg=COLORS["violet_light"])
+        upload_btns.pack(anchor="w")
+
+        def upload_doc():
+            file_path = filedialog.askopenfilename(
+                title="Select Study Material / Lecture Notes",
+                filetypes=[
+                    ("Supported Documents", "*.pdf;*.txt;*.md"),
+                    ("PDF Files", "*.pdf"),
+                    ("Text Files", "*.txt;*.md"),
+                    ("All Files", "*.*")
+                ]
+            )
+            if not file_path:
+                return
+
+            ext = os.path.splitext(file_path)[1].lower()
+            fname = os.path.basename(file_path)
+
+            try:
+                if ext == ".pdf":
+                    import fitz
+                    pdf_doc = fitz.open(file_path)
+                    total_pages = len(pdf_doc)
+                    pages_text = []
+                    for page_idx, page in enumerate(pdf_doc):
+                        t = page.get_text()
+                        if t.strip():
+                            pages_text.append(f"--- Page {page_idx + 1} ---\n{t.strip()}")
+                    pdf_doc.close()
+                    extracted_text = "\n\n".join(pages_text).strip()
+                else:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                        extracted_text = f.read().strip()
+                    total_pages = 1
+
+                if not extracted_text:
+                    messagebox.showwarning(
+                        "No text found",
+                        "The selected file does not contain readable text. If it is a scanned document, please upload a text-based PDF."
+                    )
+                    return
+
+                # If topic is empty, suggest topic from filename
+                current_topic = topic_var.get().strip()
+                if not current_topic:
+                    clean_name = os.path.splitext(fname)[0].replace("_", " ").replace("-", " ")
+                    clean_name = re.sub(r"\s+", " ", clean_name).strip()
+                    topic_var.set(clean_name.title())
+
+                # Put text into notes_text
+                notes_text.delete("1.0", tk.END)
+                notes_text.insert("1.0", extracted_text[:14000])
+
+                word_count = len(extracted_text.split())
+                doc_status_var.set(
+                    f"✅ Loaded '{fname}' ({total_pages} page(s), ~{word_count} words). "
+                    "Content extracted below — click '✨ Generate Quiz with AI'!"
+                )
+
+            except Exception as exc:
+                messagebox.showerror("Error reading document", f"Failed to extract document text: {str(exc)}")
+
+        tk.Button(
+            upload_btns, text="📁 Choose & Upload Document (PDF / TXT)...", font=(FONT, 9, "bold"),
+            bg=COLORS["violet"], fg="white", relief="flat", padx=14, pady=7,
+            cursor="hand2", command=upload_doc
+        ).pack(side="left", padx=(0, 8))
+
+        def clear_doc():
+            notes_text.delete("1.0", tk.END)
+            doc_status_var.set("Document cleared. You can upload another PDF or type notes manually.")
+
+        tk.Button(
+            upload_btns, text="Clear", font=(FONT, 9),
+            bg=COLORS["surface"], fg=COLORS["muted"], relief="flat", padx=10, pady=7,
+            cursor="hand2", command=clear_doc
+        ).pack(side="left")
+
+        # -----------------------------------------------------------------
+        # Reference Text Box
+        # -----------------------------------------------------------------
+        tk.Label(card, text="Extracted Document Content / Reference Notes (Optional):", font=(FONT, 9, "bold"),
                  bg=COLORS["surface"], fg=COLORS["ink"]).pack(anchor="w", pady=(12, 4))
         notes_text = tk.Text(card, height=6, font=(FONT, 10), relief="solid", bd=1)
         notes_text.pack(fill="x")
@@ -1038,6 +1197,9 @@ class FormaApp(tk.Tk):
     def _show_quiz_results(self, quiz, results):
         for widget in self.content.winfo_children():
             widget.destroy()
+
+        if hasattr(self, "content_canvas"):
+            self.content_canvas.yview_moveto(0.0)
 
         score = results.get("score", 0)
         total = results.get("total_questions", len(quiz.get("questions", [])))
