@@ -4,7 +4,6 @@ This is a development store. It can later be replaced by calls to the course pro
 """
 import hashlib
 import hmac
-import os
 import secrets
 import sqlite3
 from pathlib import Path
