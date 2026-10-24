@@ -15,25 +15,26 @@ class AIQuizGenerator:
             "1. Output MUST be valid JSON adhering strictly to this schema:\n"
             "{\n"
             '  "title": "Quiz Title",\n'
-            '  "description": "Short overview",\n'
+            '  "description": "Short overview of the quiz",\n'
             '  "questions": [\n'
             "    {\n"
             '      "prompt": "Question text here?",\n'
-            '      "explanation": "Why the correct answer is right and others are wrong",\n'
+            '      "explanation": "Overall explanation: why the correct answer is right",\n'
             '      "difficulty": "easy" | "medium" | "hard",\n'
             '      "options": [\n'
-            '        {"option_text": "Option A", "is_correct": true},\n'
-            '        {"option_text": "Option B", "is_correct": false},\n'
-            '        {"option_text": "Option C", "is_correct": false},\n'
-            '        {"option_text": "Option D", "is_correct": false}\n'
+            '        {"option_text": "Option A", "is_correct": true, "option_explanation": "This is correct because ..."},\n'
+            '        {"option_text": "Option B", "is_correct": false, "option_explanation": "This is wrong because ..."},\n'
+            '        {"option_text": "Option C", "is_correct": false, "option_explanation": "This is wrong because ..."},\n'
+            '        {"option_text": "Option D", "is_correct": false, "option_explanation": "This is wrong because ..."}\n'
             "      ]\n"
             "    }\n"
             "  ]\n"
             "}\n"
-            "2. Each question MUST contain 4 options, with EXACTLY ONE option having is_correct=true.\n"
-            "3. Generate EXACTLY the number of questions requested.\n"
-            "4. Explanations must be educational and clear.\n"
-            "5. Do NOT output markdown ticks (like ```json), output raw JSON only."
+            "2. Each question MUST contain exactly 4 options, with EXACTLY ONE option having is_correct=true.\n"
+            "3. Every option MUST include an option_explanation (1-2 sentences explaining why it is correct or incorrect).\n"
+            "4. Generate EXACTLY the number of questions requested.\n"
+            "5. The overall 'explanation' field should be a clear educational summary of why the correct answer is right.\n"
+            "6. Do NOT output markdown ticks (like ```json), output raw JSON only."
         )
 
         user_content = (

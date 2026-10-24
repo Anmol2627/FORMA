@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class AIOptionSchema(BaseModel):
     option_text: str = Field(..., min_length=1)
     is_correct: bool = Field(default=False)
+    option_explanation: Optional[str] = Field(default=None, description="Why this option is correct or incorrect")
 
 
 class AIQuestionSchema(BaseModel):

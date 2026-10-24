@@ -57,7 +57,8 @@ class QuizRepository:
                     option = QuestionOption(
                         question_id=question.id,
                         option_text=opt_data["option_text"].strip(),
-                        is_correct=bool(opt_data.get("is_correct", False))
+                        is_correct=bool(opt_data.get("is_correct", False)),
+                        option_explanation=opt_data.get("option_explanation")
                     )
                     db.session.add(option)
 
@@ -101,7 +102,8 @@ class QuizRepository:
                     option = QuestionOption(
                         question_id=question.id,
                         option_text=opt_data["option_text"].strip(),
-                        is_correct=bool(opt_data.get("is_correct", False))
+                        is_correct=bool(opt_data.get("is_correct", False)),
+                        option_explanation=opt_data.get("option_explanation")
                     )
                     db.session.add(option)
 

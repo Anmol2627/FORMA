@@ -122,10 +122,17 @@ class MockLLMClient(BaseLLMClient):
 
 
 def get_llm_client_from_config(config) -> BaseLLMClient:
-    api_key = getattr(config, "OPENAI_API_KEY", "")
-    base_url = getattr(config, "OPENAI_BASE_URL", None)
-    model = getattr(config, "OPENAI_MODEL", "gpt-4o-mini")
-    timeout = getattr(config, "LLM_TIMEOUT_SECONDS", 45)
+    def _cfg_get(key: str, default=None):
+        if hasattr(config, "get"):
+            val = config.get(key)
+            if val is not None:
+                return val
+        return getattr(config, key, default)
+
+    api_key = _cfg_get("OPENAI_API_KEY", "")
+    base_url = _cfg_get("OPENAI_BASE_URL", None)
+    model = _cfg_get("OPENAI_MODEL", "gpt-4o-mini")
+    timeout = _cfg_get("LLM_TIMEOUT_SECONDS", 45)
     return OpenAILLMClient(
         api_key=api_key,
         base_url=base_url,

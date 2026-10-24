@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class OptionCreateSchema(BaseModel):
     option_text: str = Field(..., min_length=1, max_length=1000)
     is_correct: bool = Field(default=False)
+    option_explanation: Optional[str] = Field(default=None, max_length=2000)
 
     @field_validator("option_text")
     @classmethod

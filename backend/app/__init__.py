@@ -82,6 +82,13 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     # Register error handlers
     register_error_handlers(app)
 
+    # Initialize LLM client from config and attach to app for use in blueprints
+    from backend.app.ai.llm_client import get_llm_client_from_config
+    from backend.app.ai.rag_service import make_rag_service
+    llm_client = get_llm_client_from_config(app.config)
+    app.llm_client = llm_client  # type: ignore[attr-defined]
+    app.rag_service = make_rag_service(llm_client if app.config.get("OPENAI_API_KEY") else None)  # type: ignore[attr-defined]
+
     # Register blueprints with /api/v1 prefix
     api_prefix = "/api/v1"
     app.register_blueprint(health_bp, url_prefix=api_prefix)
@@ -94,3 +101,4 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     app.register_blueprint(progress_bp, url_prefix=api_prefix)
 
     return app
+

@@ -14,6 +14,7 @@ class QuestionOption(db.Model):
     )
     option_text = db.Column(db.Text, nullable=False)
     is_correct = db.Column(db.Boolean, nullable=False, default=False)
+    option_explanation = db.Column(db.Text, nullable=True)  # Why this option is correct/incorrect
 
     # Relationship
     question = db.relationship("Question", back_populates="options")
@@ -24,6 +25,7 @@ class QuestionOption(db.Model):
             "question_id": self.question_id,
             "option_text": self.option_text,
             "is_correct": self.is_correct,
+            "option_explanation": self.option_explanation,
         }
 
     def to_take_dict(self) -> dict:
@@ -32,3 +34,4 @@ class QuestionOption(db.Model):
             "id": self.id,
             "option_text": self.option_text,
         }
+

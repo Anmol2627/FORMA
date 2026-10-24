@@ -1023,7 +1023,14 @@ class FormaApp(tk.Tk):
             result_response = api_client.get_attempt_results(attempt["id"], self.access_token)
             results = result_response.get("attempt", {})
 
-            self._show_quiz_results(quiz, results)
+            # Fetch full quiz with option_explanation and is_correct for the review screen
+            try:
+                full_quiz_resp = api_client.get_quiz(quiz["id"], self.access_token)
+                review_quiz = full_quiz_resp.get("quiz", full_quiz_resp) or quiz
+            except api_client.APIError:
+                review_quiz = quiz  # fallback to take-mode quiz if full fetch fails
+
+            self._show_quiz_results(review_quiz, results)
 
         except api_client.APIError as exc:
             messagebox.showerror("Submission failed", str(exc))
@@ -1082,6 +1089,45 @@ class FormaApp(tk.Tk):
                     fg=COLORS["green_text"], wraplength=760, justify="left"
                 ).pack(anchor="w", pady=(3, 0))
 
+            # Show all options with their individual explanations
+            # Need to find the options from the quiz data
+            q_data = next((q for q in quiz.get("questions", []) if q.get("id") == answer.get("question_id")), None)
+            if q_data:
+                opts = q_data.get("options", [])
+                if opts:
+                    opts_frame = tk.Frame(card, bg=COLORS["surface"])
+                    opts_frame.pack(anchor="w", fill="x", pady=(6, 2))
+                    for opt in opts:
+                        opt_text = opt.get("option_text", "")
+                        opt_is_correct = opt.get("is_correct", False)
+                        opt_explanation = opt.get("option_explanation") or ""
+                        selected_this = (opt.get("id") == answer.get("selected_option_id"))
+
+                        # Determine color based on correctness and selection
+                        if opt_is_correct:
+                            opt_color = COLORS["green_text"]
+                            prefix_sym = "✓ "
+                        elif selected_this:
+                            opt_color = COLORS["red_text"]
+                            prefix_sym = "✗ "
+                        else:
+                            opt_color = COLORS["muted"]
+                            prefix_sym = "  "
+
+                        opt_label = f"{prefix_sym}{opt_text}"
+                        tk.Label(
+                            opts_frame, text=opt_label, font=(FONT, 9, "bold" if opt_is_correct else "normal"),
+                            bg=COLORS["surface"], fg=opt_color, wraplength=740, justify="left"
+                        ).pack(anchor="w", pady=(2, 0))
+
+                        if opt_explanation:
+                            tk.Label(
+                                opts_frame, text=f"     → {opt_explanation}",
+                                font=(FONT, 8, "italic"), bg=COLORS["surface"],
+                                fg=COLORS["muted"], wraplength=720, justify="left"
+                            ).pack(anchor="w", pady=(0, 2))
+
+            # Overall question explanation
             explanation = answer.get("explanation")
             if explanation:
                 tk.Label(
@@ -1386,11 +1432,31 @@ class FormaApp(tk.Tk):
                      bg=COLORS["violet_light"], fg=COLORS["ink"], wraplength=450, justify="left").pack(anchor="w")
 
             try:
-                api_client.send_chat_message(self.active_chat_session["id"], q, self.access_token)
-                refresh_messages()
+                result = api_client.send_chat_message(self.active_chat_session["id"], q, self.access_token)
+                # Show AI response in the chat
+                ai_resp = result.get("assistant_message", {})
+                ai_content = ai_resp.get("content", "")
+                citations = ai_resp.get("citations") or []
+
+                ai_bubble = tk.Frame(
+                    chat_messages_frame, bg=COLORS["surface"], padx=12, pady=8,
+                    highlightbackground=COLORS["border"], highlightthickness=1
+                )
+                ai_bubble.pack(anchor="w", pady=4, fill="x")
+                tk.Label(
+                    ai_bubble, text="FORMA AI: " + ai_content, font=(FONT, 9),
+                    bg=COLORS["surface"], fg=COLORS["ink"], wraplength=450, justify="left"
+                ).pack(anchor="w")
+                if citations:
+                    pages_cited = ", ".join(f"p.{c['page_number']}" for c in citations)
+                    tk.Label(
+                        ai_bubble, text=f"📄 Sources: {pages_cited}",
+                        font=(FONT, 8, "italic"), bg=COLORS["surface"],
+                        fg=COLORS["muted"], wraplength=450, justify="left"
+                    ).pack(anchor="w", pady=(2, 0))
 
             except api_client.RAGNotImplementedError:
-                # Documented user-friendly unavailable state as required by Section 8
+                # Only shown if the server has no API key configured
                 rag_bubble = tk.Frame(
                     chat_messages_frame, bg=COLORS["butter"], padx=12, pady=10,
                     highlightbackground=COLORS["border"], highlightthickness=1
@@ -1398,16 +1464,10 @@ class FormaApp(tk.Tk):
                 rag_bubble.pack(anchor="w", pady=6, fill="x")
                 tk.Label(
                     rag_bubble,
-                    text="ℹ️  Your question was recorded! The RAG retrieval pipeline is currently being developed and will be active shortly.",
+                    text="⚠️  The AI backend is not configured on the server. Please set OPENAI_API_KEY in backend/.env and restart.",
                     font=(FONT, 9, "bold"), bg=COLORS["butter"], fg=COLORS["orange_text"],
                     wraplength=450, justify="left"
                 ).pack(anchor="w")
-                tk.Label(
-                    rag_bubble,
-                    text="(Backend returned 501: RAG pipeline awaiting student implementation in docs/RAG_INTEGRATION.md)",
-                    font=(FONT, 8, "italic"), bg=COLORS["butter"], fg=COLORS["muted"],
-                    wraplength=450, justify="left"
-                ).pack(anchor="w", pady=(2, 0))
 
             except api_client.APIError as exc:
                 messagebox.showerror("Chat error", str(exc))

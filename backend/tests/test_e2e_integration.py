@@ -131,13 +131,14 @@ def test_full_e2e_workflow(live_backend_server, tmp_path):
     doc_id = upload_res["document"]["id"]
     assert upload_res["document"]["page_count"] == 1
 
-    # 11. Chat Session & Message (RAG Boundary: 501 caught gracefully)
+    # 11. Chat Session & Message (RAG Pipeline returns grounded answer with citations)
     session_res = api_client.create_chat_session(doc_id, token, title="OS Study Session")
     session_id = session_res["session"]["id"]
 
-    with pytest.raises(api_client.RAGNotImplementedError) as rag_err:
-        api_client.send_chat_message(session_id, "Explain virtual memory.", token)
-    assert rag_err.value.status_code == 501
+    chat_resp = api_client.send_chat_message(session_id, "Explain virtual memory.", token)
+    assert "assistant_message" in chat_resp
+    assert chat_resp["assistant_message"]["content"]
+    assert "user_message" in chat_resp
 
     # 12. Progress Analytics
     progress_res = api_client.get_progress(token)

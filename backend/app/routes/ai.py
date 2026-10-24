@@ -29,7 +29,11 @@ def generate_quiz():
     question_schemas = []
     for idx, q in enumerate(generated_payload.questions):
         option_schemas = [
-            OptionCreateSchema(option_text=opt.option_text, is_correct=opt.is_correct)
+            OptionCreateSchema(
+                option_text=opt.option_text,
+                is_correct=opt.is_correct,
+                option_explanation=opt.option_explanation
+            )
             for opt in q.options
         ]
         q_schema = QuestionCreateSchema(
